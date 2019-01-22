@@ -3,7 +3,8 @@ include $(AXIS_TOP_DIR)/tools/build/rules/common.mak
 
 PROGS     = vidcap
 
-CFLAGS += -Wall -g -O2 -std=c++11
+CFLAGS += -Wall -g -std=c++11
+CXXFLAGS += -Wall -g -std=c++11
 ifeq ($(AXIS_BUILDTYPE),host)
 PKGS    = rapp
 LDFLAGS += -lcapturehost -ljpeg -lrapp
@@ -16,12 +17,15 @@ endif # AXIS_BUILDTYPE == host
 CFLAGS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_LIBDIR) pkg-config --cflags $(PKGS))
 LDLIBS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_LIBDIR) pkg-config --libs $(PKGS))
 
-OBJS = vidcap.o
+OBJS = vidcap.o rapp.o
 
 all:	$(PROGS)
 
 $(PROGS): $(OBJS)
-	$(CC) $(LIBS) $(LDLIBS) $^ $(LDFLAGS) -o $@
+	$(CXX) $(CFLAGS) $(LIBS) $(LDLIBS) $^ $(LDFLAGS) -o $@
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(CFLAGS) -c $<
 
 clean:
 	rm -f $(PROGS) *.o core

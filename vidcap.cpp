@@ -9,7 +9,7 @@
 #include <syslog.h>
 //#include "turbojpeg.h"
 #include <capture.h>
-#include <rapp/rapp.h>
+#include "rapp.h"
 
 #ifdef DEBUG
 #define D(x)    x
@@ -116,6 +116,7 @@ main(int argc, char** argv)
   sleep(1);
   int width = (int)capture_frame_width(frame);
   int height = (int)capture_frame_height(frame);
+  int stride = (int)capture_frame_stride(frame);
   int size = (int)capture_frame_size(frame);
   unsigned char* data = (unsigned char*)capture_frame_data(frame);
 
@@ -133,46 +134,25 @@ main(int argc, char** argv)
           height,
           size);
 
-  file = fopen(argv[4], "wb");
-  if(file == NULL) {
-    printf("file open failed!\n");
-    return -1;
-  }
-  int cropSize = cropWidth*cropHeight*3/2;
-  unsigned char* dest = (unsigned char*)malloc(cropSize);
   rapp_initialize();
-  rapp_buffer = (unsigned char*)rapp_malloc(cropWidth * cropHeight, 0);
-  memcpy(rapp_buffer, data, cropWidth * cropHeight);
-  memcpy(dest, data, width*height*3/2);
-  //cropYUV420(rapp_buffer, width, height, dest, cropX, cropY, cropWidth, cropHeight);
-  /*
-  tjhandle tjh = tjInitDecompress();
-  if(tjh == NULL) {
-    printf("tjInitCompress error '%s'\n", tjGetErrorStr());
-    return -1;
-  }
+  Filter *filt = new Filter(90, 500, 10000, 10);
+  Filter *dig_filt = new Filter(20, 100, 300, 5);
+  Contour *cont = new Contour(data, stride, width, height, atoi(argv[4]));
+  cont->save("bin.yuv");
+  Contour *dig_cont = cont->search(filt);
+  cont->search(filt);
+  //Contour *digital = dig_cont->search(dig_filt);
 
-  unsigned char* jpegBuf = NULL;
-  unsigned long jpegSize = 0;
-  printf("Decompress begin!\n");
-  if(tjDecompress2(tjh, data, size, dest, cropWidth, 0, cropHeight, TJPF_GRAY, 0)) {
-    printf("tjCompressFromYUV error '%s' \n", tjGetErrorStr());
-    return -1;
-  }
-  printf("Decompress successed! %d\n", rapp_alignment);
-  */
+  cont->save("1st.yuv");
+  //dig_cont->save("2nd.yuv");
+  //digital->save("3rd.yuv");
+  //delete digital;
+  //delete dig_cont;
+  delete cont;
+  delete dig_filt;
+  delete filt;
+  //rapp_free(rapp_buffer);
 
-  int ret = rapp_thresh_gt_u8(dest, width, rapp_buffer, width, width, height, 180);
-  if(ret < 0) {
-    printf("thresh error %s\n", rapp_error(ret));
-    printf("rapp_alignment : %d\n", rapp_alignment);
-  }
-
-  fwrite(data, 1, cropHeight*cropWidth*2, file);
-  fclose(file);
-  free(dest);
-  rapp_free(rapp_buffer);
-  //tjFree(jpegBuf);
   capture_frame_free(frame);
 
   while (i < numframes) {
