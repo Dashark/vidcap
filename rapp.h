@@ -15,11 +15,13 @@ class Filter {
 
 class Contour {
  public:
-  Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height, uint8_t thresh);
+  Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height);
   Contour *search(Filter *filter);
   ~Contour();
-
+  void thresh_gt(uint8_t thresh);
+  void thresh_lt(uint8_t thresh);
   void save(char file[]);
+  void save_bin(char file[]);
  private:
   const uint32_t dim_, width_, height_;
   uint8_t *img_, *bin_;
@@ -27,6 +29,8 @@ class Contour {
   uint8_t threshold_;
 
   uint8_t *cropByFill(unsigned box[4]);
+  void freeBin();
+  void alignBin();
 };
 
 #endif
