@@ -12,26 +12,38 @@ Filter::Filter(uint8_t iou, uint32_t mina, uint32_t maxa, uint32_t mins) {
 }
 
 unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t height) {
-  unsigned origin[20];
+  unsigned origin[2], count = 0;
   char cont[1000];
   unsigned* box = new unsigned[4];
+  box[0]=box[1]=box[2]=box[3] = 0;
   uint8_t *dest = static_cast<uint8_t*>(rapp_malloc(dim * height,0));
   int ret = 0;
-  rapp_pad_const_bin(img, dim, 0, width, height, 100, 0);
-  while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) > 0) {
-    std::cout << "How many contours are found: " << ret << std::endl;
-    int sum = rapp_stat_sum_bin(dest, dim, width, height);
+  //ret = rapp_pad_const_bin(img, dim, 0, width-2, height-2, 1, 0);
+  std::cout << rapp_error(ret) << std::endl;
+  while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) >= 0) {
+    count += 1;
+    //std::cout << "How many contours are found: " << ret << std::endl;
     ret = rapp_fill_8conn_bin(dest, dim,img, dim,width,height,origin[0],origin[1]);
-    //    std::cout << "Origin " << origin[0] << "," << origin[1] << "," << origin[2] << "," << origin[3] << std::endl;
 
-
-    ret = rapp_crop_box_bin(dest, dim,width,height,box);
-    std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
-    ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
-    if(filt(sum, box[2], box[3])) {
-      std::cout << "connected break" << std::endl;
+    //std::cout << "Origin " << origin[0] << "," << origin[1] << std::endl;
+    int sum = rapp_stat_sum_bin(dest, dim, width, height);
+    if(sum == 0) {
+      std::cout << "sum break  " << count << std::endl;
       break;
     }
+    ret = rapp_crop_box_bin(dest, dim,width,height,box);
+
+
+
+    ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
+    //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
+    if(filt(sum, box[2], box[3])) {
+      std::cout << "connected break " << count << std::endl;
+      std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+      break;
+    }
+
+    origin[0] = origin[1] = 0;
   }
   rapp_free(dest);
   std::cout << rapp_error(ret) << std::endl;
@@ -51,7 +63,8 @@ Contour::Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height, ui
   img_ = static_cast<uint8_t*>(rapp_malloc(dim_ * height, 0));
   assert(img_ != nullptr);
   std::uninitialized_copy_n(org, dim_ * height, img_);
-
+  std::uninitialized_fill_n(img_, dim_, 0);
+  std::uninitialized_fill_n(img_+dim_*(height_-1), dim_, 0);
   uint32_t width8 = width % 8 == 0 ? 0 : 1;
   width8 += width / 8;
   dim8_ = (width8 % rapp_alignment == 0 ? 0 : 1) * rapp_alignment;
