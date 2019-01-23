@@ -85,9 +85,8 @@ Contour* Contour::search(Filter *filter) {
   Contour *cont = nullptr;
   unsigned *box = filter->contour(bin_, dim8_, width_, height_);  //at least 4
   if(box != nullptr) {
-
-    //uint8_t *img = cropByFill(box);
-    //cont = new Contour(img, dim_, width_, height_, threshold_);
+    uint8_t *img = cropByFill(box);
+    cont = new Contour(img, dim_, width_, height_, threshold_);
   }
   return cont;
 }
@@ -95,15 +94,17 @@ Contour* Contour::search(Filter *filter) {
 uint8_t* Contour::cropByFill(unsigned box[4]) {
   uint32_t size = dim_ * height_;
   uint8_t *org = static_cast<uint8_t*>(rapp_malloc(size, 0));
+  assert(org != nullptr);
   std::uninitialized_copy_n(img_, size, org);
+
   size = box[1] * dim_; //upper size of image
   std::uninitialized_fill_n(org, size, 0);  // y
   uint32_t off = size;
-  uint32_t size_right = width_ - box[0] - box[2];
+  uint32_t size_right = dim_ - box[0] - box[2];
   for(uint32_t i = 0; i < box[3]; ++i) {
-    off = off + dim_ * i; //next row
     std::uninitialized_fill_n(org + off, box[0], 0);  //left part of image
     std::uninitialized_fill_n(org + off + box[2], size_right, 0); //right part of image
+    off += dim_; //next row
   }
   off = (box[1] + box[3]) * dim_; //lower part of image
   std::uninitialized_fill_n(org + off, dim_ * (height_ - box[1] - box[3]), 0); //lower of y+height
