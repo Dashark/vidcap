@@ -52,44 +52,15 @@ void cropYUV420(char* source, int width, int height,
 int
 main(int argc, char** argv)
 {
-  media_stream *     stream;
-  media_frame *      frame;
+  media_stream *     stream = NULL;
+  media_frame *      frame = NULL;
   struct timeval     tv_start, tv_end;
   int                msec;
   int                i          = 1;
   int                numframes  = 100;
   unsigned long long totalbytes = 0;
   FILE *file;
-  int cropX = 0, cropY = 0;
-  int cropWidth, cropHeight;
-  unsigned char *rapp_buffer = NULL;
 
-  if (argc < 3) {
-#if defined __i386
-    /* The host version */
-    fprintf(stderr,
-            "Usage: %s media_type media_props\n", argv[0]);
-    fprintf(stderr,
-            "Example: %s \"%s\"      \"resolution=2CIF&fps=15\"\n",
-            argv[0], IMAGE_JPEG);
-    fprintf(stderr,
-            "Example: %s \"%s\" \"resolution=352x288&sdk_format=Y800&fps=15\"\n",
-            argv[0], IMAGE_UNCOMPRESSED);
-    fprintf(stderr,
-            "Example: %s \"%s\" \"capture-cameraIP=192.168.0.90&capture-userpass=user:pass&sdk_format=Y800&resolution=2CIF&fps=15\"\n",
-            argv[0], IMAGE_UNCOMPRESSED);
-#else
-    fprintf(stderr, "Usage: %s media_type media_props [numframes]\n",
-            argv[0]);
-    fprintf(stderr, "Example: %s %s \"resolution=352x288&fps=15\" 100\n",
-            argv[0], IMAGE_JPEG);
-    fprintf(stderr,
-            "Example: %s %s \"resolution=160x120&sdk_format=Y800&fps=15\" 100\n",
-            argv[0], IMAGE_UNCOMPRESSED);
-#endif
-
-    return 1;
-  }
   /* is numframes specified ? */
   if (argc >= 4) {
     numframes = atoi(argv[3]);
@@ -101,32 +72,35 @@ main(int argc, char** argv)
   }
 
   openlog("vidcap", LOG_PID | LOG_CONS, LOG_USER);
-
-  stream = capture_open_stream(argv[1], argv[2]);
-  if (stream == NULL) {
-    LOGERR("Failed to open stream\n");
-    closelog();
-    return EXIT_FAILURE;
+  int width = 1280;
+  int height = 720;
+  int stride = 1280;
+  int size = 1280 * 720;
+  uint8_t* data = new uint8_t[size];
+  if(argc == 2) {
+    file = fopen("test.yuv", "rb");
+    fread(data, 1, size, file);
+    fclose(file);
   }
+  else {
+    delete[] data;
+    stream = capture_open_stream(argv[1], argv[2]);
+    if (stream == NULL) {
+      LOGERR("Failed to open stream\n");
+      closelog();
+      return EXIT_FAILURE;
+    }
 
-  gettimeofday(&tv_start, NULL);
+    gettimeofday(&tv_start, NULL);
 
-  /* print intital information */
-  frame = capture_get_frame(stream);
-  sleep(1);
-  int width = (int)capture_frame_width(frame);
-  int height = (int)capture_frame_height(frame);
-  int stride = (int)capture_frame_stride(frame);
-  int size = (int)capture_frame_size(frame);
-  unsigned char* data = (unsigned char*)capture_frame_data(frame);
-
-  cropWidth = width;
-  cropHeight = height;
-  if(argc >= 9) {
-    cropX = atoi(argv[5]);
-    cropY = atoi(argv[6]);
-    cropWidth = atoi(argv[7]);
-    cropHeight = atoi(argv[8]);
+    /* print intital information */
+    frame = capture_get_frame(stream);
+    sleep(1);
+    width = (int)capture_frame_width(frame);
+    height = (int)capture_frame_height(frame);
+    stride = (int)capture_frame_stride(frame);
+    size = (int)capture_frame_size(frame);
+    data = (uint8_t*)capture_frame_data(frame);
   }
   LOGINFO("etting %d frames. resolution: %dx%d framesize: %d\n",
           numframes,
@@ -135,12 +109,32 @@ main(int argc, char** argv)
           size);
 
   rapp_initialize();
-  Filter *filt = new Filter(90, 500, 10000, 10);
+  Filter *filt = new Filter(10, 2650, 102000, 15);
   Filter *dig_filt = new Filter(20, 100, 300, 5);
-  Contour *cont = new Contour(data, stride, width, height, atoi(argv[4]));
+  Contour *cont = new Contour(data, stride, width, height);
+  unsigned thresh = 150;
+  cont->thresh_gt(thresh);
   cont->save("bin.yuv");
+  /*
+  for(int i = 0; i < 3; ++i) {
+    Contour *dig_cont = cont->search(filt);
+    //dig_cont->save("2nd.yuv");
+    delete dig_cont;
+  }
+  */
+  cont->save_bin("2nd.yuv");
   Contour *dig_cont = cont->search(filt);
-  cont->search(filt);
+  dig_cont->thresh_lt(thresh);
+  dig_cont->save("last.yuv");
+  dig_cont->save_bin("last_bin.yuv");
+  Contour *digital = dig_cont->search(dig_filt);
+  digital->save("dig.yuv");
+  digital->save_bin("dig_bin.yuv");
+  delete digital;
+  digital = dig_cont->search(dig_filt);
+  digital->save("o1.yuv");
+  delete dig_cont;
+
   //Contour *digital = dig_cont->search(dig_filt);
 
   cont->save("1st.yuv");
@@ -152,26 +146,9 @@ main(int argc, char** argv)
   delete dig_filt;
   delete filt;
   //rapp_free(rapp_buffer);
+  if(frame != NULL)
+    capture_frame_free(frame);
 
-  capture_frame_free(frame);
-
-  while (i < numframes) {
-    frame = capture_get_frame(stream);
-    if (!frame) {
-      /* nothing to read, this is serious  */
-      fprintf(stderr, "Failed to read frame!");
-      syslog(LOG_CRIT, "Failed to read frame!\n");
-
-      return 1;
-    } else {
-      D(capture_time ts = capture_frame_timestamp(frame));
-      D(LOGINFO("timestamp: %" CAPTURE_TIME_FORMAT "\n", ts));
-
-      totalbytes += capture_frame_size(frame);
-      capture_frame_free(frame);
-      i++;
-    }
-  }
   gettimeofday(&tv_end, NULL);
 
   /* calculate fps */
@@ -183,8 +160,8 @@ main(int argc, char** argv)
           msec,
           (float)(i / (msec / 1000.0f)),
           (float)(totalbytes / (msec * 1000.0f)));
-
-  capture_close_stream(stream);
+  if(stream != NULL)
+    capture_close_stream(stream);
   closelog();
 
   return EXIT_SUCCESS;
