@@ -78,7 +78,7 @@ main(int argc, char** argv)
   int size = 1280 * 720;
   uint8_t* data = new uint8_t[size];
   if(argc == 2) {
-    file = fopen("test.yuv", "rb");
+    file = fopen(argv[1], "rb");
     fread(data, 1, size, file);
     fclose(file);
   }
@@ -109,40 +109,34 @@ main(int argc, char** argv)
           size);
 
   rapp_initialize();
-  Filter *filt = new Filter(10, 2650, 102000, 15);
-  Filter *dig_filt = new Filter(20, 100, 300, 5);
-  Contour *cont = new Contour(data, stride, width, height);
-  unsigned thresh = 150;
-  cont->thresh_gt(thresh);
-  cont->save("bin.yuv");
-  /*
-  for(int i = 0; i < 3; ++i) {
-    Contour *dig_cont = cont->search(filt);
-    //dig_cont->save("2nd.yuv");
-    delete dig_cont;
+  Filter *filt = new Filter(10, 650, 12000, 15);
+  Filter *dig_filt = new Filter(10, 10, 300, 1);
+  Contour *orgc = new Contour(data, stride, width, height);
+  unsigned thresh = 140, count = 0, count1 = 0;
+  char fname[50];
+  orgc->thresh_gt(thresh);
+  orgc->save("orgc.yuv");
+  orgc->save_bin("orgc_bin.yuv");
+  Contour *labelc = orgc->search(filt);
+  while(labelc != nullptr) {
+    labelc->thresh_lt(130);
+    snprintf(fname, 50, "labelc%d.yuv", count);
+    labelc->save(fname);
+    snprintf(fname, 50, "labelc%d_bin.yuv", count);
+    labelc->save_bin(fname);
+    Contour *digc = labelc->search(dig_filt);
+    while(digc != nullptr) {
+      snprintf(fname, 50, "digc%d-%d.yuv", count, count1);
+      digc->save(fname);
+      delete digc;
+      digc = labelc->search(dig_filt);
+      count1 += 1;
+    }
+    delete labelc;
+    labelc = orgc->search(filt);
+    count += 1;
   }
-  */
-  cont->save_bin("2nd.yuv");
-  Contour *dig_cont = cont->search(filt);
-  dig_cont->thresh_lt(thresh);
-  dig_cont->save("last.yuv");
-  dig_cont->save_bin("last_bin.yuv");
-  Contour *digital = dig_cont->search(dig_filt);
-  digital->save("dig.yuv");
-  digital->save_bin("dig_bin.yuv");
-  delete digital;
-  digital = dig_cont->search(dig_filt);
-  digital->save("o1.yuv");
-  delete dig_cont;
-
-  //Contour *digital = dig_cont->search(dig_filt);
-
-  cont->save("1st.yuv");
-  //dig_cont->save("2nd.yuv");
-  //digital->save("3rd.yuv");
-  //delete digital;
-  //delete dig_cont;
-  delete cont;
+  delete orgc;
   delete dig_filt;
   delete filt;
   //rapp_free(rapp_buffer);
