@@ -19,7 +19,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
   uint8_t *dest = static_cast<uint8_t*>(rapp_malloc(dim * height,0));
   int ret = 0;
   //ret = rapp_pad_const_bin(img, dim, 0, width-2, height-2, 1, 0);
-  //std::cout << rapp_error(ret) << std::endl;
+  std::cout << rapp_error(ret) << std::endl;
   while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) >= 0) {
     count += 1;
     //std::cout << "How many contours are found: " << ret << std::endl;
@@ -29,12 +29,14 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     int sum = rapp_stat_sum_bin(dest, dim, width, height);
     if(sum == 0) {
       std::cout << "sum break  " << count << std::endl;
+      delete[] box;
+      box = nullptr;
       break;
     }
     ret = rapp_crop_box_bin(dest, dim,width,height,box);
 
 
-
+    std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
     ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
     //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
     if(filt(sum, box[2], box[3])) {
@@ -63,8 +65,8 @@ Contour::Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height):di
   img_ = static_cast<uint8_t*>(rapp_malloc(dim_ * height, 0));
   assert(img_ != nullptr);
   std::uninitialized_copy_n(org, dim_ * height, img_);
-  std::uninitialized_fill_n(img_, dim_, 0);
-  std::uninitialized_fill_n(img_+dim_*(height_-1), dim_, 0);
+  //std::uninitialized_fill_n(img_, dim_, 0);
+  //std::uninitialized_fill_n(img_+dim_*(height_-1), dim_, 0);
 
   bin_ = nullptr;
   dim8_ = 0;
@@ -76,14 +78,15 @@ Contour::~Contour() {
   freeBin();
 }
 
-void Contour::thresh_gt(uint8_t thresh) {
+void Contour::thresh_gt(unsigned thresh) {
   alignBin();
   assert(bin_ != nullptr);
   rapp_thresh_gt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  std::cout << dim8_ << "  " << thresh << std::endl;
   threshold_ = thresh;
 }
 
-void Contour::thresh_lt(uint8_t thresh) {
+void Contour::thresh_lt(unsigned thresh) {
   alignBin();
   assert(bin_ != nullptr);
   rapp_thresh_lt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
@@ -98,6 +101,7 @@ Contour* Contour::search(Filter *filter) {
     std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
     uint8_t *img = cropByFill(box);
     cont = new Contour(img, dim_, width_, height_);
+    rapp_free(img);
   }
   return cont;
 }
@@ -149,7 +153,7 @@ void Contour::save_bin(char file[]) {
   uint8_t *buf1 = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
   rapp_bitblt_not_bin(buf1, dim8_, 0, bin_, dim8_, 0, width_, height_);
   FILE *pf = fopen(file, "wb");
-  rapp_type_bin_to_u8(buf, dim_, buf1, dim8_, width_, height_);
+  rapp_type_bin_to_u8(buf, dim_, bin_, dim8_, width_, height_);
   fwrite(buf, 1, dim_*height_, pf);
   fclose(pf);
   rapp_free(buf);
