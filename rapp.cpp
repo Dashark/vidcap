@@ -18,7 +18,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
   box[0]=box[1]=box[2]=box[3] = 0;
   uint8_t *dest = static_cast<uint8_t*>(rapp_malloc(dim * height,0));
   int ret = 0;
-  //ret = rapp_pad_const_bin(img, dim, 0, width-2, height-2, 1, 0);
+  ret = rapp_pad_const_bin(img, dim, 0, width, height, 1, 0);
   std::cout << rapp_error(ret) << std::endl;
   while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) >= 0) {
     count += 1;
@@ -42,6 +42,13 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     if(filt(sum, box[2], box[3])) {
       std::cout << "connected break " << count << std::endl;
       std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+      break;
+    }
+    sum = rapp_stat_sum_bin(img, dim, width, height);
+    if(sum == 0) {
+      std::cout << "sum break  " << count << std::endl;
+      delete[] box;
+      box = nullptr;
       break;
     }
 
