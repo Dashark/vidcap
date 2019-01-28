@@ -9,7 +9,10 @@
 #include <syslog.h>
 //#include "turbojpeg.h"
 #include <capture.h>
+#include <cassert>
 #include "rapp.h"
+#include "yamlServices.h"
+#include "kdtree.h"
 
 #ifdef DEBUG
 #define D(x)    x
@@ -19,6 +22,7 @@
 
 #define LOGINFO(fmt, args...)    { syslog(LOG_INFO, fmt, ## args); printf(fmt, ## args); }
 #define LOGERR(fmt, args...)     { syslog(LOG_CRIT, fmt, ## args); fprintf(stderr, fmt, ## args); }
+#define DEF_NUM_PTS 466
 
 void cropYUV420(char* source, int width, int height, 
                 char* dest, int cropX, int cropY, int cropWidth, int cropHeight)
@@ -47,6 +51,29 @@ void cropYUV420(char* source, int width, int height,
   for(int i = 0; i < cuh; i++) {
     memcpy(du+i*cuw, sv+i*width/2, cuw);
   }
+}
+
+static int data[DEF_NUM_PTS];
+static int coords[DEF_NUM_PTS][100];
+static kdtree* buildKDTree() {
+  YamlData *labelData = new YamlData();
+  labelData->parseYamlData("LabelData.yml");
+  YamlData *trainData = new YamlData();
+  trainData->parseYamlData("TrainingData.yml");
+
+  kdtree *ptree = kd_create(100);
+
+  for(int i=0; i<DEF_NUM_PTS; i++ ) {
+    for(int j =0;j<100;j++)
+      coords[i][j] = trainData->data(i,j);
+    data[i] = labelData->data(0,i);
+    printf("hello world %d\n", i);
+    if(data[i] < 0) continue;
+    assert( 0 == kd_insert( ptree, coords[i], &data[i] ) );
+  }
+  delete labelData;
+  delete trainData;
+  return ptree;
 }
 
 int
@@ -108,6 +135,8 @@ main(int argc, char** argv)
           height,
           size);
 
+  kdtree* ptree = buildKDTree();
+
   rapp_initialize();
   Filter *filt = new Filter(10, 650, 12000, 15);
   Filter *dig_filt = new Filter(10, 10, 300, 1);
@@ -139,6 +168,7 @@ main(int argc, char** argv)
   delete orgc;
   delete dig_filt;
   delete filt;
+  kd_free(ptree);
   //rapp_free(rapp_buffer);
   if(frame != NULL)
     capture_frame_free(frame);
