@@ -149,6 +149,12 @@ void Contour::alignBin() {
   bin_ = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
 }
 
+void Contour::alignCenter(float *mapx, float *mapy, size_t srcw, size_t srch, size_t dstw, size_t dsth) {
+  //align center of 2 images.
+  for(size_t i = 0; i < dstw; ++i) {mapx[i] = (i + 0.5) * srcw / dstw - 0.5;}
+  for(size_t i = 0; i < dsth; ++i) {mapy[i] = (i + 0.5) * srch / dsth - 0.5;}
+}
+
 template <typename T>
 void Contour::interp2_F(const T* const data,
                const size_t& nrows, const size_t& ncols,
