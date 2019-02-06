@@ -10,6 +10,8 @@
 //#include "turbojpeg.h"
 #include <capture.h>
 #include <cassert>
+#include <iostream>
+#include <SDL/SDL.h>
 #include "rapp.h"
 #include "yamlServices.h"
 #include "kdtree.h"
@@ -53,6 +55,55 @@ void cropYUV420(char* source, int width, int height,
   }
 }
 
+void YUVplayer(char title[], unsigned char *yuv,int w,int h) {
+
+  char c;
+
+  unsigned char* pY;
+  unsigned char* pU;
+  unsigned char* pV;
+  SDL_Rect rect;
+
+  if (SDL_Init(SDL_INIT_VIDEO) < 0){
+    fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
+    exit(1);
+  }
+  atexit(SDL_Quit);
+
+  SDL_Surface* screen = SDL_SetVideoMode(w, h, 0, 0);
+  if (screen == NULL){
+    fprintf(stderr, "create surface error!\n");
+    exit(1);
+  }
+
+  SDL_Overlay* overlay = SDL_CreateYUVOverlay(w, h, SDL_YV12_OVERLAY, screen);
+  if (overlay == NULL){
+    fprintf(stderr, "create overlay error!\n");
+    exit(1);
+  }
+
+  SDL_LockSurface(screen);
+  SDL_LockYUVOverlay(overlay);
+
+  memcpy(overlay->pixels[0], yuv, w*h);
+  memset(overlay->pixels[1], 0x80, w*h/4);
+  memset(overlay->pixels[2], 0x80, w*h/4);
+
+  SDL_UnlockYUVOverlay(overlay);
+  SDL_UnlockSurface(screen);
+
+  rect.w = w;
+  rect.h = h;
+  rect.x = rect.y = 0;
+  SDL_WM_SetCaption(title, 0);
+  SDL_DisplayYUVOverlay(overlay, &rect);
+
+  SDL_Delay(5000);
+
+    SDL_FreeYUVOverlay(overlay);
+    SDL_FreeSurface(screen);
+}
+
 static int data[DEF_NUM_PTS];
 static int coords[DEF_NUM_PTS][100];
 static kdtree* buildKDTree() {
@@ -67,8 +118,8 @@ static kdtree* buildKDTree() {
     for(int j =0;j<100;j++)
       coords[i][j] = trainData->data(i,j);
     data[i] = labelData->data(0,i);
-    printf("hello world %d\n", i);
-    if(data[i] < 0) continue;
+    //printf("hello world %d\n", i);
+    //if(data[i] < 0) continue;
     assert( 0 == kd_insert( ptree, coords[i], &data[i] ) );
   }
   delete labelData;
@@ -138,25 +189,50 @@ main(int argc, char** argv)
   kdtree* ptree = buildKDTree();
 
   rapp_initialize();
-  Filter *filt = new Filter(10, 650, 12000, 15);
+  Filter *filt = new Filter(50, 650, 12000, 15);
   Filter *dig_filt = new Filter(10, 10, 300, 1);
   Contour *orgc = new Contour(data, stride, width, height);
   unsigned thresh = 140, count = 0, count1 = 0;
   char fname[50];
   orgc->thresh_gt(thresh);
-  orgc->save("orgc.yuv");
-  orgc->save_bin("orgc_bin.yuv");
+  //orgc->save("orgc.yuv");
+  //orgc->save_bin("orgc_bin.yuv");
+  uint8_t* orgbuf = orgc->getData();
+  YUVplayer("orgc.yuv", orgbuf, 1280, 720);
   Contour *labelc = orgc->search(filt);
   while(labelc != nullptr) {
     labelc->thresh_lt(130);
     snprintf(fname, 50, "labelc%d.yuv", count);
-    labelc->save(fname);
-    snprintf(fname, 50, "labelc%d_bin.yuv", count);
-    labelc->save_bin(fname);
+    orgbuf = labelc->getData();
+    YUVplayer(fname, orgbuf, 1280, 720);
+    //labelc->save(fname);
+    //snprintf(fname, 50, "labelc%d_bin.yuv", count);
+    //labelc->save_bin(fname);
     Contour *digc = labelc->search(dig_filt);
     while(digc != nullptr) {
       snprintf(fname, 50, "digc%d-%d.yuv", count, count1);
-      digc->save(fname);
+      //digc->save(fname);
+    orgbuf = digc->getData();
+    YUVplayer(fname, orgbuf, 1280, 720);
+
+      int* dig = digc->getPacked();
+      int *buf = new int[100];
+      int buf1[100];
+      std::uninitialized_copy_n(dig, 100, buf);
+      delete[] dig;
+      
+      struct kdres *pres;
+      pres = kd_nearest(ptree, buf);
+      std::cout << "find results: " << kd_res_size(pres) << std::endl;
+      
+      while(!kd_res_end(pres)) {
+        int *pch = static_cast<int*>(kd_res_item(pres, buf1));
+        std::cout << "node has data:" << *pch << std::endl;
+        kd_res_next(pres);
+      }
+      
+      kd_res_free(pres);
+      
       delete digc;
       digc = labelc->search(dig_filt);
       count1 += 1;
