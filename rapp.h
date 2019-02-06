@@ -18,8 +18,10 @@ class Contour {
   Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height);
   Contour *search(Filter *filter);
   ~Contour();
-  void thresh_gt(uint8_t thresh);
-  void thresh_lt(uint8_t thresh);
+  void thresh_gt(unsigned thresh);
+  void thresh_lt(unsigned thresh);
+  int* getPacked();
+  uint8_t* getData();
   void save(char file[]);
   void save_bin(char file[]);
  private:
@@ -31,6 +33,13 @@ class Contour {
   uint8_t *cropByFill(unsigned box[4]);
   void freeBin();
   void alignBin();
+
+  template <typename T>
+    void interp2_F(const T* const data,
+                   const size_t& nrows, const size_t& ncols,
+                   const T* const x, const T* const y,
+                   const size_t& N, T* result,
+                   const long long& origin_offset);
 };
 
 #endif
