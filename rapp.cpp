@@ -201,6 +201,11 @@ void Contour::interp2_F(const T* const data,
 }
 
 int* Contour::getPacked() {
+  //for testing
+  float mx[10], my[10];
+  alignCenter(mx, my, 5, 5, 10, 10);
+  std::cout << mx[0] << " " << mx[1] << " " << mx[2] << std::endl;
+
   uint32_t size = width_ * height_, cn = 0;
   int* buf = new int[size];
   //std::uninitialized_fill_n(buf, size, 255);
