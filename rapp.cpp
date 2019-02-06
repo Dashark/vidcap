@@ -18,7 +18,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
   box[0]=box[1]=box[2]=box[3] = 0;
   uint8_t *dest = static_cast<uint8_t*>(rapp_malloc(dim * height,0));
   int ret = 0;
-  ret = rapp_pad_const_bin(img, dim, 0, width, height, 1, 0);
+  //ret = rapp_pad_const_bin(img, dim, 0, width, height, 1, 0);
   std::cout << rapp_error(ret) << std::endl;
   while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) >= 0) {
     count += 1;
@@ -36,7 +36,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     ret = rapp_crop_box_bin(dest, dim,width,height,box);
 
 
-    std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+    //std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
     ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
     //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
     if(filt(sum, box[2], box[3])) {
@@ -147,6 +147,24 @@ void Contour::alignBin() {
   dim8_ = (width8 % rapp_alignment == 0 ? 0 : 1) * rapp_alignment;
   dim8_ += width8;
   bin_ = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
+}
+
+int* Contour::getPacked() {
+  uint32_t size = width_ * height_, cn = 0;
+  int* buf = new int[size];
+  //std::uninitialized_fill_n(buf, size, 255);
+  for(uint32_t i = 0; i < size; ++i) {
+    if(img_[i] != 255) {
+      buf[cn] = img_[i];
+      cn += 1;
+    }
+  }
+  std::cout << "Packed image size:" << cn << std::endl;
+  return buf;
+}
+
+uint8_t* Contour::getData() {
+  return img_;
 }
 
 void Contour::save(char file[]) {
