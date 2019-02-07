@@ -100,17 +100,39 @@ void Contour::thresh_lt(unsigned thresh) {
   threshold_ = thresh;
 }
 
+unsigned getU8dim(unsigned width, unsigned height) {
+  size_t size = width * height;
+  size_t asize = rapp_align(size);
+  return asize / height;
+}
+
 Contour* Contour::search(Filter *filter) {
   assert(filter != nullptr);
   Contour *cont = nullptr;
   unsigned *box = filter->contour(bin_, dim8_, width_, height_);  //at least 4
   if(box != nullptr) {
     std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
-    uint8_t *img = cropByFill(box);
-    cont = new Contour(img, dim_, width_, height_);
-    rapp_free(img);
+    unsigned boxdim = getU8dim(box[2], box[3]);
+    std::cout << "Box dim: " << boxdim << std::endl;
+    uint8_t *img = crop(box);
+    cont = new Contour(img, boxdim, box[2], box[3]);
+    delete[] img;
   }
   return cont;
+}
+
+uint8_t* Contour::crop(unsigned box[4]) {
+  size_t size = box[2] * box[3];
+  uint8_t* buf = new uint8_t[size];
+  assert(buf != nullptr);
+  unsigned srcoff = box[0] + box[1] * dim_;
+  unsigned dstoff = 0;
+  for(unsigned i = 0; i < box[3]; ++i) {
+    std::uninitialized_copy_n(img_ + srcoff, box[2], buf + dstoff);
+    srcoff += dim_;
+    dstoff += box[2];
+  }
+  return buf;
 }
 
 uint8_t* Contour::cropByFill(unsigned box[4]) {
