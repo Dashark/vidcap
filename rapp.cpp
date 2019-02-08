@@ -279,22 +279,37 @@ void Contour::interp2_F(const T* const data,
 }
 
 int* Contour::getPacked() {
-  //for testing
-  float mx[10], my[10];
-  alignCenter(mx, my, 5, 5, 10, 10);
-  std::cout << mx[0] << " " << mx[1] << " " << mx[2] << std::endl;
 
-  uint32_t size = width_ * height_, cn = 0;
-  int* buf = new int[size];
-  //std::uninitialized_fill_n(buf, size, 255);
-  for(uint32_t i = 0; i < size; ++i) {
-    if(img_[i] != 255) {
-      buf[cn] = img_[i];
-      cn += 1;
+  float mx[10], my[10];
+  alignCenter(mx, my, width_, height_, 10, 10);
+  std::cout << "getPacked: " << width_ << " " << height_ << std::endl;
+  std::cout << "getPacked: " << mx[0] << " " << mx[1] << " " << mx[2] << std::endl;
+  std::cout << "getPacked: " << my[0] << " " << my[1] << " " << my[2] << std::endl;
+  //convert uint8 to float
+  float *imgb = new float[width_*height_];
+  for(int h = 0; h < height_; ++h) {
+    for(int r = 0; r < width_; ++r) {
+      imgb[h * width_ + r] = static_cast<float>(img_[h * dim_ + r]);
     }
   }
-  std::cout << "Packed image size:" << cn << std::endl;
-  return buf;
+  float* buf = new float[100];
+  interp2_F(imgb, width_, height_, mx, my, 10, buf, 0);
+
+  //convert float to int
+  int *ibuf = new int[100];
+  for(int i = 0; i < 100; ++i)
+    ibuf[i] = std::ceil(buf[i]);
+#ifdef YUV_SHOW
+  uint8_t *tmp = new uint8_t[100];
+  for(int i = 0; i < 100; ++i)
+    tmp[i] = static_cast<uint8_t>(std::ceil(buf[i]));
+  YUVplayer("resized", tmp, 10, 10);
+  delete[] tmp;
+#endif
+
+  delete[] imgb;
+  delete[] buf;
+  return ibuf;
 }
 
 uint8_t* Contour::getData() {
@@ -303,7 +318,7 @@ uint8_t* Contour::getData() {
 
 void Contour::show(char file[]) {
 #ifdef YUV_SHOW
-  YUVplayer(file, img_, width_, height_);
+  YUVplayer(file, img_, dim_, height_);
 #endif
 }
 
