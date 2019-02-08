@@ -2,7 +2,58 @@
 #include <iostream>
 #include <algorithm>
 #include <cassert>
+#include <SDL/SDL.h>
 
+#ifdef YUV_SHOW
+static void YUVplayer(char title[], unsigned char *yuv,int w,int h) {
+
+  char c;
+
+  unsigned char* pY;
+  unsigned char* pU;
+  unsigned char* pV;
+  SDL_Rect rect;
+
+  if (SDL_Init(SDL_INIT_VIDEO) < 0){
+    fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
+    exit(1);
+  }
+  atexit(SDL_Quit);
+
+  SDL_Surface* screen = SDL_SetVideoMode(w, h, 0, 0);
+  if (screen == NULL){
+    fprintf(stderr, "create surface error!\n");
+    exit(1);
+  }
+
+  SDL_Overlay* overlay = SDL_CreateYUVOverlay(w, h, SDL_YV12_OVERLAY, screen);
+  if (overlay == NULL){
+    fprintf(stderr, "create overlay error!\n");
+    exit(1);
+  }
+
+  SDL_LockSurface(screen);
+  SDL_LockYUVOverlay(overlay);
+
+  memcpy(overlay->pixels[0], yuv, w*h);
+  memset(overlay->pixels[1], 0x80, w*h/4);
+  memset(overlay->pixels[2], 0x80, w*h/4);
+
+  SDL_UnlockYUVOverlay(overlay);
+  SDL_UnlockSurface(screen);
+
+  rect.w = w;
+  rect.h = h;
+  rect.x = rect.y = 0;
+  SDL_WM_SetCaption(title, 0);
+  SDL_DisplayYUVOverlay(overlay, &rect);
+
+  SDL_Delay(5000);
+
+    SDL_FreeYUVOverlay(overlay);
+    SDL_FreeSurface(screen);
+}
+#endif
 ////////////////////////////////////////////////////////////////////
 Filter::Filter(uint8_t iou, uint32_t mina, uint32_t maxa, uint32_t mins) {
   this->iou_ = iou;
@@ -55,7 +106,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     origin[0] = origin[1] = 0;
   }
   rapp_free(dest);
-  //std::cout << rapp_error(ret) << std::endl;
+  std::cout << rapp_error(ret) << std::endl;
   return box;
 }
 
@@ -88,22 +139,26 @@ Contour::~Contour() {
 void Contour::thresh_gt(unsigned thresh) {
   alignBin();
   assert(bin_ != nullptr);
-  rapp_thresh_gt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
-  std::cout << dim8_ << "  " << thresh << std::endl;
+  int ret = rapp_thresh_gt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  std::cout << "thresh_gt: " << rapp_error(ret) << std::endl;
+  std::cout << "thresh_gt: " << dim8_ << "  " << thresh << std::endl;
   threshold_ = thresh;
 }
 
 void Contour::thresh_lt(unsigned thresh) {
   alignBin();
   assert(bin_ != nullptr);
-  rapp_thresh_lt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  int ret = rapp_thresh_lt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  std::cout << "thresh_lt: " << rapp_error(ret) << std::endl;
+  std::cout << "thresh_lt: " << dim8_ << "  " << thresh << std::endl;
   threshold_ = thresh;
 }
 
 unsigned getU8dim(unsigned width, unsigned height) {
-  size_t size = width * height;
+  size_t size = width;
   size_t asize = rapp_align(size);
-  return asize / height;
+  std::cout << size << "," << asize << std::endl;
+  return asize;
 }
 
 Contour* Contour::search(Filter *filter) {
@@ -166,8 +221,9 @@ void Contour::alignBin() {
   freeBin();
   uint32_t width8 = width_ % 8 == 0 ? 0 : 1;
   width8 += width_ / 8;
-  dim8_ = (width8 % rapp_alignment == 0 ? 0 : 1) * rapp_alignment;
-  dim8_ += width8;
+  dim8_ = width8 % rapp_alignment == 0 ? 0 : 1;
+  dim8_ += width8 / rapp_alignment;
+  dim8_ *= rapp_alignment;
   bin_ = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
 }
 
@@ -243,6 +299,12 @@ int* Contour::getPacked() {
 
 uint8_t* Contour::getData() {
   return img_;
+}
+
+void Contour::show(char file[]) {
+#ifdef YUV_SHOW
+  YUVplayer(file, img_, width_, height_);
+#endif
 }
 
 void Contour::save(char file[]) {
