@@ -29,7 +29,7 @@
 void cropYUV420(char* source, int width, int height, 
                 char* dest, int cropX, int cropY, int cropWidth, int cropHeight)
 {
-  int size = width * height;
+  //int size = width * height;
   int cx = cropX - cropX % 2;
   int cy = cropY - cropY % 2;
   int cw = cropWidth + cropWidth % 2;
@@ -55,54 +55,6 @@ void cropYUV420(char* source, int width, int height,
   }
 }
 
-void YUVplayer(char title[], unsigned char *yuv,int w,int h) {
-
-  char c;
-
-  unsigned char* pY;
-  unsigned char* pU;
-  unsigned char* pV;
-  SDL_Rect rect;
-
-  if (SDL_Init(SDL_INIT_VIDEO) < 0){
-    fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
-    exit(1);
-  }
-  atexit(SDL_Quit);
-
-  SDL_Surface* screen = SDL_SetVideoMode(w, h, 0, 0);
-  if (screen == NULL){
-    fprintf(stderr, "create surface error!\n");
-    exit(1);
-  }
-
-  SDL_Overlay* overlay = SDL_CreateYUVOverlay(w, h, SDL_YV12_OVERLAY, screen);
-  if (overlay == NULL){
-    fprintf(stderr, "create overlay error!\n");
-    exit(1);
-  }
-
-  SDL_LockSurface(screen);
-  SDL_LockYUVOverlay(overlay);
-
-  memcpy(overlay->pixels[0], yuv, w*h);
-  memset(overlay->pixels[1], 0x80, w*h/4);
-  memset(overlay->pixels[2], 0x80, w*h/4);
-
-  SDL_UnlockYUVOverlay(overlay);
-  SDL_UnlockSurface(screen);
-
-  rect.w = w;
-  rect.h = h;
-  rect.x = rect.y = 0;
-  SDL_WM_SetCaption(title, 0);
-  SDL_DisplayYUVOverlay(overlay, &rect);
-
-  SDL_Delay(5000);
-
-    SDL_FreeYUVOverlay(overlay);
-    SDL_FreeSurface(screen);
-}
 
 static int data[DEF_NUM_PTS];
 static int coords[DEF_NUM_PTS][100];
@@ -153,15 +105,16 @@ main(int argc, char** argv)
   int width = 1280;
   int height = 720;
   int stride = 1280;
-  int size = 1280 * 720;
-  uint8_t* data = new uint8_t[size];
+  size_t size = 1280 * 720;
+  uint8_t* data1 = new uint8_t[size];
   if(argc == 2) {
     file = fopen(argv[1], "rb");
-    fread(data, 1, size, file);
+    size_t s = fread(data1, 1, size, file);
+    assert(s == size);
     fclose(file);
   }
   else {
-    delete[] data;
+    delete[] data1;
     stream = capture_open_stream(argv[1], argv[2]);
     if (stream == NULL) {
       LOGERR("Failed to open stream\n");
@@ -178,7 +131,7 @@ main(int argc, char** argv)
     height = (int)capture_frame_height(frame);
     stride = (int)capture_frame_stride(frame);
     size = (int)capture_frame_size(frame);
-    data = (uint8_t*)capture_frame_data(frame);
+    data1 = (uint8_t*)capture_frame_data(frame);
   }
   LOGINFO("etting %d frames. resolution: %dx%d framesize: %d\n",
           numframes,
@@ -188,23 +141,27 @@ main(int argc, char** argv)
 
   kdtree* ptree = buildKDTree();
 
+  if (SDL_Init(SDL_INIT_VIDEO) < 0){
+    fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
+    exit(1);
+  }
   rapp_initialize();
   Filter *filt = new Filter(50, 650, 12000, 15);
-  Filter *dig_filt = new Filter(10, 10, 300, 1);
-  Contour *orgc = new Contour(data, stride, width, height);
+  Filter *dig_filt = new Filter(10, 10, 300, 5);
+  Contour *orgc = new Contour(data1, stride, width, height);
   unsigned thresh = 140, count = 0, count1 = 0;
   char fname[50];
   orgc->thresh_gt(thresh);
+  return 0;
   //orgc->save("orgc.yuv");
   //orgc->save_bin("orgc_bin.yuv");
-  uint8_t* orgbuf = orgc->getData();
-  YUVplayer("orgc.yuv", orgbuf, 1280, 720);
+  //uint8_t* orgbuf = orgc->getData();
+  orgc->showBin("orgc.yuv");
   Contour *labelc = orgc->search(filt);
   while(labelc != nullptr) {
     labelc->thresh_lt(130);
     snprintf(fname, 50, "labelc%d.yuv", count);
-    orgbuf = labelc->getData();
-    YUVplayer(fname, orgbuf, 1280, 720);
+    labelc->showU8(fname);
     //labelc->save(fname);
     //snprintf(fname, 50, "labelc%d_bin.yuv", count);
     //labelc->save_bin(fname);
@@ -212,27 +169,26 @@ main(int argc, char** argv)
     while(digc != nullptr) {
       snprintf(fname, 50, "digc%d-%d.yuv", count, count1);
       //digc->save(fname);
-    orgbuf = digc->getData();
-    YUVplayer(fname, orgbuf, 1280, 720);
+      digc->showU8(fname);
 
       int* dig = digc->getPacked();
       int *buf = new int[100];
       int buf1[100];
       std::uninitialized_copy_n(dig, 100, buf);
       delete[] dig;
-      
+
       struct kdres *pres;
       pres = kd_nearest(ptree, buf);
       std::cout << "find results: " << kd_res_size(pres) << std::endl;
       
       while(!kd_res_end(pres)) {
-        int *pch = static_cast<int*>(kd_res_item(pres, buf1));
+        int *pch = static_cast<int*>(kd_res_item(pres, buf));
         std::cout << "node has data:" << *pch << std::endl;
         kd_res_next(pres);
       }
       
       kd_res_free(pres);
-      
+
       delete digc;
       digc = labelc->search(dig_filt);
       count1 += 1;
@@ -262,6 +218,7 @@ main(int argc, char** argv)
           (float)(totalbytes / (msec * 1000.0f)));
   if(stream != NULL)
     capture_close_stream(stream);
+  SDL_Quit();
   closelog();
 
   return EXIT_SUCCESS;
