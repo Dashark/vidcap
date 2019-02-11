@@ -4,9 +4,10 @@ include $(AXIS_TOP_DIR)/tools/build/rules/common.mak
 PROGS     = vidcap
 
 CFLAGS += -Wall -g -std=c++11
-CXXFLAGS += -Wall -g -std=c++11
+#CXXFLAGS += -Wall -g -std=c++11
 ifeq ($(AXIS_BUILDTYPE),host)
 PKGS    = rapp
+CFLAGS += -DYUV_SHOW
 LDFLAGS += -lcapturehost -ljpeg -lrapp -lSDL
 else
 PKGS    = glib-2.0 axhttp axevent axparameter axstorage
