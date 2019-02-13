@@ -152,7 +152,8 @@ main(int argc, char** argv)
   unsigned thresh = 140, count = 0, count1 = 0;
   char fname[50];
   orgc->thresh_gt(thresh);
-  return 0;
+  orgc->showU8("orgc.yuv");
+
   //orgc->save("orgc.yuv");
   //orgc->save_bin("orgc_bin.yuv");
   //uint8_t* orgbuf = orgc->getData();
@@ -162,6 +163,9 @@ main(int argc, char** argv)
     labelc->thresh_lt(130);
     snprintf(fname, 50, "labelc%d.yuv", count);
     labelc->showU8(fname);
+    labelc->showBin(fname);
+
+
     //labelc->save(fname);
     //snprintf(fname, 50, "labelc%d_bin.yuv", count);
     //labelc->save_bin(fname);
