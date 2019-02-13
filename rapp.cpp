@@ -46,7 +46,7 @@ static void YUVplayer(const char title[], const unsigned char *yuv,int w,int h) 
   SDL_WM_SetCaption(title, 0);
   SDL_DisplayYUVOverlay(overlay, rect);
 
-  SDL_Delay(5000);
+  SDL_Delay(1000);
 
   SDL_FreeYUVOverlay(overlay);
   SDL_FreeSurface(screen);
@@ -178,10 +178,10 @@ Contour* Contour::search(Filter *filter) {
     std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
     //unsigned boxdim = getU8dim(box[2], box[3]);
 
-    box[2] = rapp_align(box[2]);
+    //box[2] = rapp_align(box[2]);
     std::cout << "Box dim: " << box[2] << std::endl;
     uint8_t *img = crop(box);
-    cont = new Contour(img, box[2], box[2], box[3]);
+    cont = new Contour(img, rapp_align(box[2]), box[2], box[3]);
     delete[] img;
     delete[] box;
   }
@@ -190,7 +190,8 @@ Contour* Contour::search(Filter *filter) {
 }
 
 uint8_t* Contour::crop(unsigned box[4]) {
-  size_t size = box[2] * box[3];
+  unsigned dim = rapp_align(box[2]);
+  size_t size = dim * box[3];
   uint8_t* buf = new uint8_t[size];
   assert(buf != nullptr);
   unsigned srcoff = off_u8_ + box[0] + box[1] * (dim_u8_ + 2*pad_u8_);
@@ -198,7 +199,7 @@ uint8_t* Contour::crop(unsigned box[4]) {
   for(unsigned i = 0; i < box[3]; ++i) {
     std::uninitialized_copy_n(img_ + srcoff, box[2], buf + dstoff);
     srcoff += dim_u8_ + 2*pad_u8_;
-    dstoff += box[2];
+    dstoff += dim;
   }
   return buf;
 }
@@ -311,9 +312,12 @@ int* Contour::getPacked() {
   std::cout << "getPacked: " << my[0] << " " << my[1] << " " << my[2] << std::endl;
   //convert uint8 to float
   float *imgb = new float[width_*height_];
+  uint32_t dim = dim_u8_ + 2 * pad_u8_;
   for(uint32_t h = 0; h < height_; ++h) {
+    uint32_t dstoff = h * width_;
+    uint32_t srcoff = off_u8_ + h * dim;
     for(uint32_t r = 0; r < width_; ++r) {
-      imgb[h * width_ + r] = static_cast<float>(img_[h * dim_u8_ + r]);
+      imgb[dstoff + r] = static_cast<float>(img_[srcoff + r]);
     }
   }
   float* buf = new float[100];
@@ -344,8 +348,7 @@ uint8_t* Contour::getData() {
 
 void Contour::showBin(const char file[]) {
 #ifdef YUV_SHOW
-  uint32_t off = RAPP_BMARK_HPAD*(dim_bin_+2*pad_bin_) + pad_bin_;
-  YUVplayer(file, bin_+off, dim_bin_+2*pad_bin_, height_);
+  YUVplayer(file, bin_+off_bin_, dim_bin_+2*pad_bin_, height_);
 #endif
 }
 void Contour::showU8(const char file[]) {
