@@ -4,6 +4,16 @@
 #include <cassert>
 #include <SDL/SDL.h>
 
+/**
+ *  The vertical (left/right) buffer padding value in bytes.
+ */
+#define RAPP_BMARK_VPAD 2
+
+/**
+ *  The horizontal (top/bottom) buffer padding value in pixels.
+ */
+#define RAPP_BMARK_HPAD 16
+
 #ifdef YUV_SHOW
 static void YUVplayer(const char title[], const unsigned char *yuv,int w,int h) {
   SDL_Rect *rect = new SDL_Rect;
@@ -74,10 +84,11 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     ret = rapp_crop_box_bin(dest, dim,width,height,box);
     //std::cout << "rapp_crop_box_bin : " << rapp_error(ret) << std::endl;
 
-    //std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+    std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
     ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
 
-    //std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
+    std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
+    //YUVplayer("testing", img, dim, height);
     //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
     if(filt(sum, box[2], box[3])) {
       std::cout << "connected break " << count << std::endl;
@@ -108,46 +119,46 @@ bool Filter::filt(int32_t sum, unsigned bwidth, unsigned bheight) {
 }
 
 ////////////////////////////////////////////////////////////////////
-Contour::Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height):dim_(dim), width_(width), height_(height) {
+Contour::Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height):dim_u8_(rapp_align(width)), dim_bin_(rapp_align((width + 7) / 8)), rot_u8_(rapp_align(height)), rot_bin_(rapp_align((height + 7) / 8)), pad_u8_(rapp_align(RAPP_BMARK_VPAD)), pad_bin_(rapp_align((RAPP_BMARK_VPAD + 7) / 8)), off_u8_(RAPP_BMARK_HPAD*(dim_u8_+2*pad_u8_) + pad_u8_), off_bin_(RAPP_BMARK_HPAD*(dim_bin_+2*pad_bin_) + pad_bin_), width_(width), height_(height) {
   assert(org != nullptr);
-
-  img_ = static_cast<uint8_t*>(rapp_malloc(dim_ * height, 0));
+  size_t u8sz = (height + 2 * RAPP_BMARK_HPAD) * (dim_u8_ + 2 * pad_u8_);
+  size_t binsz = (height + 2 * RAPP_BMARK_HPAD) * (dim_bin_ + 2 * pad_bin_);
+  img_ = static_cast<uint8_t*>(rapp_malloc(u8sz, 0));
   assert(img_ != nullptr);
-  for(uint32_t i = 0; i < height; ++i)
-    std::uninitialized_copy_n(org + i * width, width, img_ + i * dim);
+  rapp_pixop_copy_u8(img_+off_u8_, dim_u8_ + 2 * pad_u8_, org, dim, width, height);
+  //for(uint32_t i = 0; i < height; ++i)
+  //std::uninitialized_copy_n(org + i * width, width, img_ + i * dim);
   //std::uninitialized_fill_n(img_, dim_, 0);
   //std::uninitialized_fill_n(img_+dim_*(height_-1), dim_, 0);
 
-  bin_ = nullptr;
-  dim8_ = 0;
+  bin_ = static_cast<uint8_t*>(rapp_malloc(binsz, 0));
+  //dim8_ = 0;
   threshold_ = 0;
 }
 
 Contour::~Contour() {
   std::cout << "Contour destructor!!!" << std::endl;
   rapp_free(img_);
-  freeBin();
+  rapp_free(bin_);
   std::cout << "Contour destructor end!!!" << std::endl;
 }
 
 void Contour::thresh_gt(unsigned thresh) {
-  alignBin();
   assert(bin_ != nullptr);
-  int ret = rapp_thresh_gt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  int ret = rapp_thresh_gt_u8(bin_+off_bin_, dim_bin_+2*pad_bin_, img_+off_u8_, dim_u8_+2*pad_u8_, width_, height_, thresh);
   std::cout << "thresh_gt: " << rapp_error(ret) << std::endl;
-  std::cout << "thresh_gt: " << dim8_ << "  " << thresh << std::endl;
-  ret = rapp_pad_const_bin(bin_, dim8_, 0, width_, height_, 1, 0);
+  std::cout << "thresh_gt: " << dim_bin_ << "  " << thresh << std::endl;
+  ret = rapp_pad_const_bin(bin_+off_bin_, dim_bin_+2*pad_bin_, 0, width_, height_, 1, 0);
   std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
   threshold_ = thresh;
 }
 
 void Contour::thresh_lt(unsigned thresh) {
-  alignBin();
   assert(bin_ != nullptr);
-  int ret = rapp_thresh_lt_u8(bin_, dim8_, img_, dim_, width_, height_, thresh);
+  int ret = rapp_thresh_lt_u8(bin_+off_bin_, dim_bin_+2*pad_bin_, img_+off_u8_, dim_u8_+2*pad_u8_, width_, height_, thresh);
   std::cout << "thresh_lt: " << rapp_error(ret) << std::endl;
-  std::cout << "thresh_lt: " << dim8_ << "  " << thresh << std::endl;
-  ret = rapp_pad_const_bin(bin_, dim8_, 0, width_-2, height_-2, 1, 255);
+  std::cout << "thresh_lt: " << dim_bin_ << "  " << thresh << std::endl;
+  ret = rapp_pad_const_bin(bin_+off_bin_, dim_bin_+2*pad_bin_, 0, width_, height_, 1, 0);
   std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
   threshold_ = thresh;
 }
@@ -162,13 +173,15 @@ unsigned getU8dim(unsigned width, unsigned height) {
 Contour* Contour::search(Filter *filter) {
   assert(filter != nullptr);
   Contour *cont = nullptr;
-  unsigned *box = filter->contour(bin_, dim8_, width_, height_);  //at least 4
+  unsigned *box = filter->contour(bin_+off_bin_, dim_bin_+2*pad_bin_, width_, height_);  //at least 4
   if(box != nullptr) {
     std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
-    unsigned boxdim = getU8dim(box[2], box[3]);
-    std::cout << "Box dim: " << boxdim << std::endl;
+    //unsigned boxdim = getU8dim(box[2], box[3]);
+
+    box[2] = rapp_align(box[2]);
+    std::cout << "Box dim: " << box[2] << std::endl;
     uint8_t *img = crop(box);
-    cont = new Contour(img, boxdim, box[2], box[3]);
+    cont = new Contour(img, box[2], box[2], box[3]);
     delete[] img;
     delete[] box;
   }
@@ -180,37 +193,37 @@ uint8_t* Contour::crop(unsigned box[4]) {
   size_t size = box[2] * box[3];
   uint8_t* buf = new uint8_t[size];
   assert(buf != nullptr);
-  unsigned srcoff = box[0] + box[1] * dim_;
+  unsigned srcoff = off_u8_ + box[0] + box[1] * (dim_u8_ + 2*pad_u8_);
   unsigned dstoff = 0;
   for(unsigned i = 0; i < box[3]; ++i) {
     std::uninitialized_copy_n(img_ + srcoff, box[2], buf + dstoff);
-    srcoff += dim_;
+    srcoff += dim_u8_ + 2*pad_u8_;
     dstoff += box[2];
   }
   return buf;
 }
 
 uint8_t* Contour::cropByFill(unsigned box[4]) {
-  uint32_t size = dim_ * height_;
+  uint32_t size = dim_u8_ * height_;
   uint8_t *org = static_cast<uint8_t*>(rapp_malloc(size, 0));
   assert(org != nullptr);
   std::uninitialized_copy_n(img_, size, org);
 
-  size = box[1] * dim_; //upper size of image
+  size = box[1] * dim_u8_; //upper size of image
   std::uninitialized_fill_n(org, size, 255);  // y
   uint32_t off = size;
-  uint32_t size_right = dim_ - box[0] - box[2];
+  uint32_t size_right = dim_u8_ - box[0] - box[2];
   for(uint32_t i = 0; i < box[3]; ++i) {
     std::uninitialized_fill_n(org + off, box[0], 255);  //left part of image
     std::uninitialized_fill_n(org + off + box[0] + box[2], size_right, 255); //right part of image
-    off += dim_; //next row
+    off += dim_u8_; //next row
   }
-  off = (box[1] + box[3]) * dim_; //lower part of image
-  std::uninitialized_fill_n(org + off, dim_ * (height_ - box[1] - box[3]), 255); //lower of y+height
+  off = (box[1] + box[3]) * dim_u8_; //lower part of image
+  std::uninitialized_fill_n(org + off, dim_u8_ * (height_ - box[1] - box[3]), 255); //lower of y+height
 
   return org;
 }
-
+/*
 void Contour::freeBin() {
   if(bin_ != nullptr) {
     rapp_free(bin_);
@@ -224,7 +237,7 @@ void Contour::alignBin() {
   bin_ = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
   assert(bin_ != nullptr);
 }
-
+*/
 void Contour::alignCenter(float *mapx, float *mapy, size_t srcw, size_t srch, size_t dstw, size_t dsth) {
   //align center of 2 images.
   //size_t sz = dstw * dsth;
@@ -300,7 +313,7 @@ int* Contour::getPacked() {
   float *imgb = new float[width_*height_];
   for(uint32_t h = 0; h < height_; ++h) {
     for(uint32_t r = 0; r < width_; ++r) {
-      imgb[h * width_ + r] = static_cast<float>(img_[h * dim_ + r]);
+      imgb[h * width_ + r] = static_cast<float>(img_[h * dim_u8_ + r]);
     }
   }
   float* buf = new float[100];
@@ -331,28 +344,29 @@ uint8_t* Contour::getData() {
 
 void Contour::showBin(const char file[]) {
 #ifdef YUV_SHOW
-  YUVplayer(file, bin_, dim8_, height_);
+  uint32_t off = RAPP_BMARK_HPAD*(dim_bin_+2*pad_bin_) + pad_bin_;
+  YUVplayer(file, bin_+off, dim_bin_+2*pad_bin_, height_);
 #endif
 }
 void Contour::showU8(const char file[]) {
 #ifdef YUV_SHOW
-  YUVplayer(file, img_, dim_, height_);
+  YUVplayer(file, img_+off_u8_, dim_u8_+2*pad_u8_, height_);
 #endif
 }
 
 void Contour::save(const char file[]) {
   FILE *pf = fopen(file, "wb");
-  fwrite(img_, 1, dim_*height_, pf);
+  fwrite(img_, 1, dim_u8_*height_, pf);
   fclose(pf);
 }
 
 void Contour::save_bin(const char file[]) {
-  uint8_t *buf = static_cast<uint8_t*>(rapp_malloc(dim_ * height_, 0));
-  uint8_t *buf1 = static_cast<uint8_t*>(rapp_malloc(dim8_ * height_, 0));
-  rapp_bitblt_not_bin(buf1, dim8_, 0, bin_, dim8_, 0, width_, height_);
+  uint8_t *buf = static_cast<uint8_t*>(rapp_malloc(dim_u8_ * height_, 0));
+  uint8_t *buf1 = static_cast<uint8_t*>(rapp_malloc(dim_bin_ * height_, 0));
+  rapp_bitblt_not_bin(buf1, dim_bin_, 0, bin_, dim_bin_, 0, width_, height_);
   FILE *pf = fopen(file, "wb");
-  rapp_type_bin_to_u8(buf, dim_, bin_, dim8_, width_, height_);
-  fwrite(buf, 1, dim_*height_, pf);
+  rapp_type_bin_to_u8(buf, dim_u8_, bin_, dim_bin_, width_, height_);
+  fwrite(buf, 1, dim_u8_*height_, pf);
   fclose(pf);
   rapp_free(buf);
   rapp_free(buf1);
