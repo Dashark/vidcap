@@ -55,15 +55,57 @@ void cropYUV420(char* source, int width, int height,
   }
 }
 
+#ifdef YUV_SHOW
+static void YUVplayer(const char title[], const unsigned char *yuv,int w,int h) {
+  SDL_Rect *rect = new SDL_Rect;
 
+  SDL_Surface* screen = SDL_SetVideoMode(w, h, 0, 0);
+  if (screen == NULL){
+    fprintf(stderr, "create surface error!\n");
+    exit(1);
+  }
+
+  SDL_Overlay* overlay = SDL_CreateYUVOverlay(w, h, SDL_YV12_OVERLAY, screen);
+  if (overlay == NULL){
+    fprintf(stderr, "create overlay error!\n");
+    exit(1);
+  }
+
+  SDL_LockSurface(screen);
+  SDL_LockYUVOverlay(overlay);
+
+  memcpy(overlay->pixels[0], yuv, w*h);
+  memset(overlay->pixels[1], 0x80, w*h/4);
+  memset(overlay->pixels[2], 0x80, w*h/4);
+
+  SDL_UnlockYUVOverlay(overlay);
+  SDL_UnlockSurface(screen);
+
+  rect->w = w;
+  rect->h = h;
+  rect->x = rect->y = 0;
+  SDL_WM_SetCaption(title, 0);
+  SDL_DisplayYUVOverlay(overlay, rect);
+
+  SDL_Delay(1000);
+
+  SDL_FreeYUVOverlay(overlay);
+  SDL_FreeSurface(screen);
+  delete rect;
+}
+#endif
+
+static void savePacked(const char file[], int* buf);
 static int data[DEF_NUM_PTS];
 static int coords[DEF_NUM_PTS][100];
 static kdtree* buildKDTree() {
   YamlData *labelData = new YamlData();
   labelData->parseYamlData("LabelData.yml");
+  labelData->printYamlData();
   YamlData *trainData = new YamlData();
   trainData->parseYamlData("TrainingData.yml");
-
+  char tmp[100];
+  unsigned char tmp1[100];
   kdtree *ptree = kd_create(100);
 
   for(int i=0; i<DEF_NUM_PTS; i++ ) {
@@ -71,12 +113,69 @@ static kdtree* buildKDTree() {
       coords[i][j] = trainData->data(i,j);
     data[i] = labelData->data(0,i);
     //printf("hello world %d\n", i);
-    //if(data[i] < 0) continue;
+    if(data[i] < 0) continue;
     assert( 0 == kd_insert( ptree, coords[i], &data[i] ) );
+    /*
+    if(data[i] == 1 || data[i] == 6 || data[i] == 8) {
+      sprintf(tmp, "%d-%d.sam", i, data[i]);
+      savePacked(tmp, coords[i]);
+      for(int j = 0; j < 100; ++j)
+        tmp1[j] = static_cast<unsigned char>(coords[i][j]);
+      YUVplayer(tmp, tmp1, 10, 10);
+    }
+    */
   }
   delete labelData;
   delete trainData;
   return ptree;
+}
+
+static void savePacked(const char file[], int* buf) {
+  uint8_t *tmp = new uint8_t[100];
+  FILE *pf = fopen(file, "w");
+  for(int i = 0; i < 100; ++i) {
+    tmp[i] = static_cast<uint8_t>(buf[i]);
+    fprintf(pf, "%d ", tmp[i]);
+    if((i+1)%10 == 0)
+      fprintf(pf, "\n");
+  }
+  fclose(pf);
+  delete[] tmp;
+}
+
+static int distance(int *pos1, int *pos2, int dim) {
+  int ret = 0;
+  for(int i = 0; i < dim; ++i) {
+    ret += (pos1[i] - pos2[i])*(pos1[i] - pos2[i]);
+  }
+  return ret;
+}
+
+static int filter(int *data, int *dist, int num) {
+  int count = 0;
+  for(int i = 0; i < num - 1; ++i) {
+    for(int j = i + 1; j < num; ++j) {
+      if(data[i] == data[j]) {
+        dist[i] += dist[j];
+        count += 1;
+        data[j] = -1;
+        dist[j] = -1;
+      }
+    }
+    if(count != 0) dist[i] /= count;
+    count = 0;
+  }
+  int i = 0, min = dist[0], index = data[0];
+  for(i = 0; i < num; ++i) {
+    if(data[i] != -1 && dist[i] < min) {
+      min = dist[i];
+      index = data[i];
+    }
+  }
+  if(min > 280000)
+    index = -1;
+  std::cout << "\tcorrect data: " << index << "  distance: " << min << std::endl;
+  return index;
 }
 
 int
@@ -140,13 +239,14 @@ main(int argc, char** argv)
           size);
 
   kdtree* ptree = buildKDTree();
+  //return 0;
 
   if (SDL_Init(SDL_INIT_VIDEO) < 0){
     fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
     exit(1);
   }
   rapp_initialize();
-  Filter *filt = new Filter(50, 650, 12000, 15);
+  Filter *filt = new Filter(50, 650, 1500, 15);
   Filter *dig_filt = new Filter(10, 10, 300, 5);
   Contour *orgc = new Contour(data1, stride, width, height);
   unsigned thresh = 140, count = 0, count1 = 0;
@@ -169,6 +269,7 @@ main(int argc, char** argv)
     //labelc->save(fname);
     //snprintf(fname, 50, "labelc%d_bin.yuv", count);
     //labelc->save_bin(fname);
+    bool isLabel = true;
     Contour *digc = labelc->search(dig_filt);
     while(digc != nullptr) {
       snprintf(fname, 50, "digc%d-%d.yuv", count, count1);
@@ -176,6 +277,7 @@ main(int argc, char** argv)
       digc->showU8(fname);
 
       int* dig = digc->getPacked();
+      savePacked(fname, dig);
       int *buf = new int[100];
       int buf1[100];
       std::uninitialized_copy_n(dig, 100, buf);
@@ -183,19 +285,28 @@ main(int argc, char** argv)
 
       struct kdres *pres;
       pres = kd_nearest(ptree, buf);
+      //pres = kd_nearest_range(ptree, buf, 800);
       std::cout << "find results: " << kd_res_size(pres) << std::endl;
-      
+      int data[500]={-1}, dist[500]={-1}, num = 0;
       while(!kd_res_end(pres)) {
-        int *pch = static_cast<int*>(kd_res_item(pres, buf));
-        std::cout << "node has data:" << *pch << std::endl;
+        int *pch = static_cast<int*>(kd_res_item(pres, buf1));
+        data[num] = *pch; dist[num] = distance(buf, buf1, 100);
+        //std::cout << "node has data:" << data[num];
+        //std::cout << "   distance: " << dist[num] << std::endl;
+        num += 1;
         kd_res_next(pres);
       }
-      
+      if(num != 0)
+        isLabel = isLabel && (filter(data, dist, num) != -1);
       kd_res_free(pres);
 
       delete digc;
       digc = labelc->search(dig_filt);
       count1 += 1;
+    }
+    if(isLabel) {
+      labelc->showU8("correct");
+      break;
     }
     delete labelc;
     labelc = orgc->search(filt);
