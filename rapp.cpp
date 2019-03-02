@@ -70,7 +70,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
   int ret = 0;
   while((ret = rapp_contour_8conn_bin(origin,cont,1000,img, dim,width,height)) >= 0) {
     count += 1;
-    std::cout << "How many contours are found: " << ret << std::endl;
+    //std::cout << "How many contours are found: " << ret << std::endl;
     ret = rapp_fill_8conn_bin(dest, dim,img, dim,width,height,origin[0],origin[1]);
 
     //std::cout << "Origin " << origin[0] << "," << origin[1] << std::endl;
@@ -84,14 +84,14 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     ret = rapp_crop_box_bin(dest, dim,width,height,box);
     //std::cout << "rapp_crop_box_bin : " << rapp_error(ret) << std::endl;
 
-    std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+    //std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
     ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
 
-    std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
+    //std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
     //YUVplayer("testing", img, dim, height);
     //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
     if(filt(sum, box[2], box[3])) {
-      std::cout << "connected break " << count << std::endl;
+      //std::cout << "connected break " << count << std::endl;
       std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
       break;
     }
@@ -108,7 +108,7 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     origin[0] = origin[1] = 0;
   }
   rapp_free(dest);
-  std::cout << "Filter::contour end : " << rapp_error(ret) << std::endl;
+  //std::cout << "Filter::contour end : " << rapp_error(ret) << std::endl;
   return box;
 }
 
@@ -137,36 +137,36 @@ Contour::Contour(uint8_t *org, uint32_t dim, uint32_t width, uint32_t height):di
 }
 
 Contour::~Contour() {
-  std::cout << "Contour destructor!!!" << std::endl;
+  //std::cout << "Contour destructor!!!" << std::endl;
   rapp_free(img_);
   rapp_free(bin_);
-  std::cout << "Contour destructor end!!!" << std::endl;
+  //std::cout << "Contour destructor end!!!" << std::endl;
 }
 
 void Contour::thresh_gt(unsigned thresh) {
   assert(bin_ != nullptr);
   int ret = rapp_thresh_gt_u8(bin_+off_bin_, dim_bin_+2*pad_bin_, img_+off_u8_, dim_u8_+2*pad_u8_, width_, height_, thresh);
-  std::cout << "thresh_gt: " << rapp_error(ret) << std::endl;
-  std::cout << "thresh_gt: " << dim_bin_ << "  " << thresh << std::endl;
+  //std::cout << "thresh_gt: " << rapp_error(ret) << std::endl;
+  //std::cout << "thresh_gt: " << dim_bin_ << "  " << thresh << std::endl;
   ret = rapp_pad_const_bin(bin_+off_bin_, dim_bin_+2*pad_bin_, 0, width_, height_, 1, 0);
-  std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
+  //std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
   threshold_ = thresh;
 }
 
 void Contour::thresh_lt(unsigned thresh) {
   assert(bin_ != nullptr);
   int ret = rapp_thresh_lt_u8(bin_+off_bin_, dim_bin_+2*pad_bin_, img_+off_u8_, dim_u8_+2*pad_u8_, width_, height_, thresh);
-  std::cout << "thresh_lt: " << rapp_error(ret) << std::endl;
-  std::cout << "thresh_lt: " << dim_bin_ << "  " << thresh << std::endl;
+  //std::cout << "thresh_lt: " << rapp_error(ret) << std::endl;
+  //std::cout << "thresh_lt: " << dim_bin_ << "  " << thresh << std::endl;
   ret = rapp_pad_const_bin(bin_+off_bin_, dim_bin_+2*pad_bin_, 0, width_, height_, 1, 0);
-  std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
+  //std::cout << "rapp_pad_const_bin:" << rapp_error(ret) << std::endl;
   threshold_ = thresh;
 }
 
 unsigned getU8dim(unsigned width, unsigned height) {
   size_t size = width;
   size_t asize = rapp_align(size);
-  std::cout << size << "," << asize << std::endl;
+  //std::cout << size << "," << asize << std::endl;
   return asize;
 }
 
@@ -175,11 +175,11 @@ Contour* Contour::search(Filter *filter) {
   Contour *cont = nullptr;
   unsigned *box = filter->contour(bin_+off_bin_, dim_bin_+2*pad_bin_, width_, height_);  //at least 4
   if(box != nullptr) {
-    std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
+    //std::cout << "Contour Box for Crop: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << std::endl;
     //unsigned boxdim = getU8dim(box[2], box[3]);
 
     //box[2] = rapp_align(box[2]);
-    std::cout << "Box dim: " << box[2] << std::endl;
+    //std::cout << "Box dim: " << box[2] << std::endl;
     uint8_t *img = crop(box);
     cont = new Contour(img, rapp_align(box[2]), box[2], box[3]);
     delete[] img;
@@ -307,9 +307,9 @@ int* Contour::getPacked() {
     std::uninitialized_copy_n(my, 10, my + i * 10);
   }
   */
-  std::cout << "getPacked: " << width_ << " " << height_ << std::endl;
-  std::cout << "getPacked: " << mx[0] << " " << mx[1] << " " << mx[2] << std::endl;
-  std::cout << "getPacked: " << my[0] << " " << my[1] << " " << my[2] << std::endl;
+  //std::cout << "getPacked: " << width_ << " " << height_ << std::endl;
+  //std::cout << "getPacked: " << mx[0] << " " << mx[1] << " " << mx[2] << std::endl;
+  //std::cout << "getPacked: " << my[0] << " " << my[1] << " " << my[2] << std::endl;
   //convert uint8 to float
   float *imgb = new float[width_*height_];
   uint32_t dim = dim_u8_ + 2 * pad_u8_;
