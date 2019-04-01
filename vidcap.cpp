@@ -101,7 +101,7 @@ static int coords[DEF_NUM_PTS][100];
 static kdtree* buildKDTree() {
   YamlData *labelData = new YamlData();
   labelData->parseYamlData("LabelData.yml");
-  labelData->printYamlData();
+  //labelData->printYamlData();
   YamlData *trainData = new YamlData();
   trainData->parseYamlData("TrainingData.yml");
   char tmp[100];
@@ -172,7 +172,7 @@ static int filter(int *data, int *dist, int num) {
       index = data[i];
     }
   }
-  if(min > 280000)
+  if(min > 400000)
     index = -1;
   std::cout << "\tcorrect data: " << index << "  distance: " << min << std::endl;
   return index;
@@ -186,19 +186,9 @@ main(int argc, char** argv)
   struct timeval     tv_start, tv_end;
   int                msec;
   int                i          = 1;
-  int                numframes  = 100;
+  int                numframes  = 2;
   unsigned long long totalbytes = 0;
   FILE *file;
-
-  /* is numframes specified ? */
-  if (argc >= 4) {
-    numframes = atoi(argv[3]);
-
-    /* Need at least 2 frames for the achived fps calculation */
-    if (numframes < 2) {
-      numframes = 2;
-    }
-  }
 
   openlog("vidcap", LOG_PID | LOG_CONS, LOG_USER);
   int width = 1280;
@@ -207,6 +197,7 @@ main(int argc, char** argv)
   size_t size = 1280 * 720;
   uint8_t* data1 = new uint8_t[size];
   if(argc == 2) {
+    std::cout << "File name: " << argv[1] << std::endl;
     file = fopen(argv[1], "rb");
     size_t s = fread(data1, 1, size, file);
     assert(s == size);
@@ -246,16 +237,16 @@ main(int argc, char** argv)
     exit(1);
   }
   rapp_initialize();
-  Filter *filt = new Filter(50, 650, 1500, 15);
+  Filter *filt = new Filter(30, 650, 2500, 15);
   Filter *dig_filt = new Filter(10, 10, 300, 5);
   Contour *orgc = new Contour(data1, stride, width, height);
   unsigned thresh = 140, count = 0, count1 = 0;
   char fname[50];
   orgc->thresh_gt(thresh);
   orgc->showU8("orgc.yuv");
-
-  //orgc->save("orgc.yuv");
-  //orgc->save_bin("orgc_bin.yuv");
+  if(argc == 5)
+    orgc->save(argv[4]);
+  orgc->save_bin("orgc_bin1.yuv");
   //uint8_t* orgbuf = orgc->getData();
   orgc->showBin("orgc.yuv");
   Contour *labelc = orgc->search(filt);
@@ -269,7 +260,7 @@ main(int argc, char** argv)
     //labelc->save(fname);
     //snprintf(fname, 50, "labelc%d_bin.yuv", count);
     //labelc->save_bin(fname);
-    bool isLabel = true;
+    bool isLabel = false;
     Contour *digc = labelc->search(dig_filt);
     while(digc != nullptr) {
       snprintf(fname, 50, "digc%d-%d.yuv", count, count1);
@@ -296,8 +287,10 @@ main(int argc, char** argv)
         num += 1;
         kd_res_next(pres);
       }
-      if(num != 0)
-        isLabel = isLabel && (filter(data, dist, num) != -1);
+      if(num != 0 && (filter(data, dist, num) != -1))
+        isLabel = true;//isLabel && (filter(data, dist, num) != -1);
+      else
+        isLabel = false;
       kd_res_free(pres);
 
       delete digc;
@@ -306,7 +299,8 @@ main(int argc, char** argv)
     }
     if(isLabel) {
       labelc->showU8("correct");
-      break;
+      isLabel = false;
+      //continue;
     }
     delete labelc;
     labelc = orgc->search(filt);
