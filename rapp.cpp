@@ -46,7 +46,7 @@ static void YUVplayer(const char title[], const unsigned char *yuv,int w,int h) 
   SDL_WM_SetCaption(title, 0);
   SDL_DisplayYUVOverlay(overlay, rect);
 
-  SDL_Delay(1000);
+  SDL_Delay(10);
 
   SDL_FreeYUVOverlay(overlay);
   SDL_FreeSurface(screen);
@@ -72,33 +72,41 @@ unsigned * Filter::contour(uint8_t *img, uint32_t dim, uint32_t width, uint32_t 
     count += 1;
     //std::cout << "How many contours are found: " << ret << std::endl;
     ret = rapp_fill_8conn_bin(dest, dim,img, dim,width,height,origin[0],origin[1]);
-
+    if(ret < 0) {
+      //std::cout << "rapp_fill_8conn_bin : " << rapp_error(ret) << std::endl;
+      //std::cout << origin[0] << "::" << origin[1] << std::endl;
+      delete[] box;
+      box = nullptr;
+      break;
+    }
     //std::cout << "Origin " << origin[0] << "," << origin[1] << std::endl;
     int sum = rapp_stat_sum_bin(dest, dim, width, height);
-    if(sum == 0) {
-      std::cout << "sum break  " << count << std::endl;
+    if(sum <= 0) {
+      //std::cout << "sum break  " << count << std::endl;
       delete[] box;
       box = nullptr;
       break;
     }
     ret = rapp_crop_box_bin(dest, dim,width,height,box);
-    //std::cout << "rapp_crop_box_bin : " << rapp_error(ret) << std::endl;
+    if(ret <= 0)
+      std::cout << "rapp_crop_box_bin : " << rapp_error(ret) << std::endl;
 
     //std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
     ret = rapp_bitblt_xor_bin(img, dim,0,dest, dim,0,width,height);
-
+    if(ret < 0)
+      std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
     //std::cout << "rapp_bitblt_xor_bin : " << rapp_error(ret) << std::endl;
     //YUVplayer("testing", img, dim, height);
     //ret = rapp_pad_const_bin(img, dim, 0, width-20, height-20, 10, 0);
     if(filt(sum, box[2], box[3])) {
       //std::cout << "connected break " << count << std::endl;
-      std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << std::endl;
+      std::cout << "Contour Box: " << box[0] << "," << box[1] << "," << box[2] <<","<< box[3] << "," << sum << "," << (1.0f*sum)/(box[2]*box[3]) << std::endl;
       break;
     }
 
     sum = rapp_stat_sum_bin(img, dim, width, height);
-    if(sum == 0) {
-      std::cout << "sum break2  " << count << std::endl;
+    if(sum <= 0) {
+      //std::cout << "sum break2  " << count << std::endl;
       delete[] box;
       box = nullptr;
 
@@ -359,7 +367,11 @@ void Contour::showU8(const char file[]) {
 
 void Contour::save(const char file[]) {
   FILE *pf = fopen(file, "wb");
-  fwrite(img_, 1, dim_u8_*height_, pf);
+  uint8_t *buf = img_ + off_u8_;
+  for(int i = 0; i < height_; ++i) {
+    fwrite(buf, 1, dim_u8_, pf);
+    buf += dim_u8_ + 2 * pad_u8_;
+  }
   fclose(pf);
 }
 
@@ -368,7 +380,7 @@ void Contour::save_bin(const char file[]) {
   uint8_t *buf1 = static_cast<uint8_t*>(rapp_malloc(dim_bin_ * height_, 0));
   rapp_bitblt_not_bin(buf1, dim_bin_, 0, bin_, dim_bin_, 0, width_, height_);
   FILE *pf = fopen(file, "wb");
-  rapp_type_bin_to_u8(buf, dim_u8_, bin_, dim_bin_, width_, height_);
+  rapp_type_bin_to_u8(buf, dim_u8_, bin_ + off_bin_, dim_bin_ + 2*pad_bin_, width_, height_);
   fwrite(buf, 1, dim_u8_*height_, pf);
   fclose(pf);
   rapp_free(buf);
