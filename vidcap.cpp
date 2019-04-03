@@ -191,8 +191,8 @@ main(int argc, char** argv)
   FILE *file;
 
   openlog("vidcap", LOG_PID | LOG_CONS, LOG_USER);
-  int width = 1280;
-  int height = 720;
+  int width = atoi(argv[1]);
+  int height = atoi(argv[2]);
   int stride = 1280;
   size_t size = 1280 * 720;
   uint8_t* data1 = new uint8_t[size];
