@@ -46,7 +46,7 @@ static void YUVplayer(const char title[], const unsigned char *yuv,int w,int h) 
   SDL_WM_SetCaption(title, 0);
   SDL_DisplayYUVOverlay(overlay, rect);
 
-  SDL_Delay(10);
+  SDL_Delay(15);
 
   SDL_FreeYUVOverlay(overlay);
   SDL_FreeSurface(screen);
