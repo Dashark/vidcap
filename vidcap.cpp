@@ -191,16 +191,19 @@ main(int argc, char** argv)
   FILE *file;
 
   openlog("vidcap", LOG_PID | LOG_CONS, LOG_USER);
+  rapp_initialize();
   int width = atoi(argv[1]);
   int height = atoi(argv[2]);
-  int stride = 1280;
-  size_t size = 1280 * 720;
+  int stride = rapp_align(atoi(argv[1]));
+  size_t size = stride * height;
   uint8_t* data1 = new uint8_t[size];
-  if(argc == 2) {
-    std::cout << "File name: " << argv[1] << std::endl;
-    file = fopen(argv[1], "rb");
-    size_t s = fread(data1, 1, size, file);
-    assert(s == size);
+
+  if(argc == 4) {
+    std::cout << "File name: " << argv[3] << std::endl;
+    file = fopen(argv[3], "rb");
+    for(int i = 0; i < height; ++i)
+      size_t s = fread(data1 + stride * i, 1, width, file);
+    //assert(s == size);
     fclose(file);
   }
   else {
@@ -223,10 +226,11 @@ main(int argc, char** argv)
     size = (int)capture_frame_size(frame);
     data1 = (uint8_t*)capture_frame_data(frame);
   }
-  LOGINFO("etting %d frames. resolution: %dx%d framesize: %d\n",
+  LOGINFO("etting %d frames. resolution: %dx%d stride %d framesize: %d\n",
           numframes,
           width,
           height,
+          stride,
           size);
 
   kdtree* ptree = buildKDTree();
@@ -236,11 +240,11 @@ main(int argc, char** argv)
     fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
     exit(1);
   }
-  rapp_initialize();
+
   Filter *filt = new Filter(30, 650, 2500, 15);
   Filter *dig_filt = new Filter(10, 10, 300, 5);
   Contour *orgc = new Contour(data1, stride, width, height);
-  unsigned thresh = 140, count = 0, count1 = 0;
+  unsigned thresh = 90, count = 0, count1 = 0;
   char fname[50];
   orgc->thresh_gt(thresh);
   orgc->showU8("orgc.yuv");
@@ -251,7 +255,7 @@ main(int argc, char** argv)
   orgc->showBin("orgc.yuv");
   Contour *labelc = orgc->search(filt);
   while(labelc != nullptr) {
-    labelc->thresh_lt(130);
+    labelc->thresh_lt(90);
     snprintf(fname, 50, "labelc%d.yuv", count);
     labelc->showU8(fname);
     labelc->showBin(fname);
@@ -268,7 +272,7 @@ main(int argc, char** argv)
       digc->showU8(fname);
 
       int* dig = digc->getPacked();
-      savePacked(fname, dig);
+      //savePacked(fname, dig);
       int *buf = new int[100];
       int buf1[100];
       std::uninitialized_copy_n(dig, 100, buf);
