@@ -15,6 +15,7 @@
 #include "rapp.h"
 #include "yamlServices.h"
 #include "kdtree.h"
+#include "otsu.h"
 
 #ifdef DEBUG
 #define D(x)    x
@@ -240,25 +241,34 @@ main(int argc, char** argv)
     fprintf(stderr, "can not initialize SDL:%s\n", SDL_GetError());
     exit(1);
   }
-
-  Filter *filt = new Filter(30, 650, 2500, 15);
-  Filter *dig_filt = new Filter(10, 10, 300, 5);
+  uint32_t sum = 0;
+  for(int i = 0; i < size; ++i) {
+    sum += data1[i];
+  }
+  printf("means: %d\n", sum / size);
+  OtsuBox otsu(width, height, stride, data1);
+  printf("otsu: %d\n", otsu.thresh());
+  Filter *filt = new Filter(30, 650, 4000, 15);
+  Filter *dig_filt = new Filter(10, 10, 800, 5);
   Contour *orgc = new Contour(data1, stride, width, height);
-  unsigned thresh = 90, count = 0, count1 = 0;
+  unsigned thresh = otsu.thresh(), count = 0, count1 = 0;
   char fname[50];
-  orgc->thresh_gt(thresh);
+  for(unsigned th = thresh; th > 60; th-=2) {
+    printf("otsu: %d\n", th);
+  orgc->thresh_gt(th);
   orgc->showU8("orgc.yuv");
   if(argc == 5)
     orgc->save(argv[4]);
-  orgc->save_bin("orgc_bin1.yuv");
+  snprintf(fname, 50, "orgc_bin%d.yuv", th);
+  orgc->save_bin(fname);
   //uint8_t* orgbuf = orgc->getData();
   orgc->showBin("orgc.yuv");
   Contour *labelc = orgc->search(filt);
   while(labelc != nullptr) {
-    labelc->thresh_lt(90);
+    labelc->thresh_lt(th);
     snprintf(fname, 50, "labelc%d.yuv", count);
     labelc->showU8(fname);
-    labelc->showBin(fname);
+    //labelc->showBin(fname);
 
 
     //labelc->save(fname);
@@ -309,6 +319,7 @@ main(int argc, char** argv)
     delete labelc;
     labelc = orgc->search(filt);
     count += 1;
+  }
   }
   delete orgc;
   delete dig_filt;
