@@ -20,7 +20,7 @@ LDLIBS += $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_LIBDIR) pkg-config --libs $(PKGS)
 CFLAGS += -I./include
 CXXFLAGS += $(CFLAGS)
 SLDLIBS += ./lib/*.a
-OBJS = vidcap.o rapp.o yamlServices.o
+OBJS = vidcap.o rapp.o yamlServices.o otsu.o
 
 all:	$(PROGS)
 
